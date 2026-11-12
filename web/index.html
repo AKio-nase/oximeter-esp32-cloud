@@ -257,6 +257,7 @@
 
         function hideError() {
             document.getElementById('errorPanel').className = 'error-panel';
+            document.getElementById('errorText').textContent = '';
         }
 
         function updateConnectionStatus(connected, message) {
