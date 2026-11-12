@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>血氧浓度端-云监控系统</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #10b981 0%, #065f46 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 800px; margin: 0 auto; }
+        .header { text-align: center; color: white; margin-bottom: 30px; }
+        .header h1 { font-size: 2.5rem; margin-bottom: 10px; }
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+        }
+        .card-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .input-group { margin-bottom: 16px; }
+        .input-group label {
+            display: block;
+            font-weight: 500;
+            color: #555;
+            margin-bottom: 8px;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1rem;
+        }
+        .input-group input:focus { outline: none; border-color: #10b981; }
+        .btn {
+            padding: 12px 32px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #10b981 0%, #065f46 100%);
+            color: white;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(16, 185, 129, 0.4);
+        }
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; transform: translateY(-2px); box-shadow: 0 5px 20px rgba(239, 68, 68, 0.4); }
+        .btn-danger:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .status-panel { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+        .status-card {
+            background: #f5f7fa;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }
+        .status-card h3 { font-size: 0.9rem; color: #666; margin-bottom: 10px; }
+        .status-card .value { font-size: 2rem; font-weight: 700; }
+        .status-card .value.normal { color: #10b981; }
+        .status-card .value.warning { color: #f59e0b; }
+        .status-card .value.danger { color: #ef4444; }
+        .status-card .value.info { color: #3b82f6; }
+        .log-panel {
+            background: #1e1e1e;
+            border-radius: 10px;
+            padding: 16px;
+            height: 250px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            color: #d4d4d4;
+        }
+        .log-entry { margin-bottom: 8px; }
+        .log-time { color: #888; margin-right: 8px; }
+        .log-success { color: #10b981; }
+        .log-error { color: #ef4444; }
+        .log-warning { color: #f59e0b; }
+        .connection-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            margin-left: auto;
+        }
+        .connection-status.connected { background: #d1fae5; color: #065f46; }
+        .connection-status.disconnected { background: #fee2e2; color: #991b1b; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; }
+        .status-dot.online { background: #10b981; animation: pulse 2s infinite; }
+        .status-dot.offline { background: #ef4444; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .error-panel {
+            background: #fef2f2;
+            border: 2px solid #ef4444;
+            border-radius: 10px;
+            padding: 16px;
+            margin-top: 16px;
+            display: none;
+        }
+        .error-panel.show { display: block; }
+        .error-panel h4 { color: #dc2626; margin-bottom: 8px; }
+        .error-panel pre {
+            color: #991b1b;
+            font-size: 0.85rem;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .alarm-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            background: #fef2f2;
+            color: #dc2626;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .alarm-indicator.normal {
+            background: #d1fae5;
+            color: #065f46;
+            animation: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>血氧浓度端-云监控系统</h1>
+        </div>
+
+        <div class="card">
+            <div class="card-title">
+                MQTT连接配置
+                <span class="connection-status disconnected" id="connectionStatus">
+                    <span class="status-dot offline"></span>
+                    <span id="statusText">未连接</span>
+                </span>
+            </div>
+            
+            <div class="input-group">
+                <label>Hostname</label>
+                <input type="text" id="hostname" value="" placeholder="xxxxxx.ala.cn-hangzhou.emqxsl.cn">
+            </div>
+
+            <div class="input-group">
+                <label>Port（WebSocket TLS 填 8084）</label>
+                <input type="text" id="port" value="8084">
+            </div>
+
+            <div class="input-group">
+                <label>Client ID</label>
+                <input type="text" id="clientId" value="web-client-001">
+            </div>
+            <div class="input-group">
+                <label>Username</label>
+                <input type="text" id="username" value="">
+            </div>
+            <div class="input-group">
+                <label>Password</label>
+                <input type="password" id="password" value="">
+            </div>
+            
+            <button class="btn btn-primary" id="connectBtn" onclick="connect()">连接</button>
+            <button class="btn btn-danger" id="disconnectBtn" onclick="disconnect()" disabled>断开</button>
+        </div>
+
+        <div class="card">
+            <div class="card-title">
+                设备状态
+                <span id="alarmIndicator" class="alarm-indicator" style="display:none;">
+                    <span class="status-dot offline"></span>
+                    <span>低血氧警报</span>
+                </span>
+            </div>
+            <div class="status-panel">
+                <div class="status-card">
+                    <h3>血氧浓度 (SPO2)</h3>
+                    <div class="value" id="spo2Value">---</div>
+                </div>
+                <div class="status-card">
+                    <h3>心率 (HR)</h3>
+                    <div class="value" id="heartRateValue">---</div>
+                </div>
+                <div class="status-card">
+                    <h3>报警状态</h3>
+                    <div class="value" id="alarmStatus">正常</div>
+                </div>
+            </div>
+            <div class="error-panel" id="errorPanel">
+                <h4>错误信息</h4>
+                <pre id="errorText"></pre>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">远程控制</div>
+            <button class="btn btn-danger" id="stopAlarmBtn" onclick="sendStopAlarm()" disabled>关闭警报</button>
+        </div>
+
+        <div class="card">
+            <div class="card-title">系统日志</div>
+            <div class="log-panel" id="logPanel"></div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
+    <script>
+        var client = null;
+        var isConnected = false;
+        var intentionalDisconnect = false;
+
+        function log(message, type) {
+            if (!type) type = 'info';
+            var now = new Date();
+            var timeStr = now.toLocaleTimeString();
+            var entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = '<span class="log-time">[' + timeStr + ']</span><span class="log-' + type + '">' + message + '</span>';
+            var logPanel = document.getElementById('logPanel');
+            logPanel.appendChild(entry);
+            logPanel.scrollTop = logPanel.scrollHeight;
+            console.log('[' + type.toUpperCase() + '] ' + message);
+        }
+
+        function showError(title, message) {
+            var errorPanel = document.getElementById('errorPanel');
+            var errorText = document.getElementById('errorText');
+            errorText.textContent = title + ': ' + message;
+            errorPanel.className = 'error-panel show';
+            log(title + ': ' + message, 'error');
+        }
+
+        function hideError() {
+            document.getElementById('errorPanel').className = 'error-panel';
+        }
+
+        function updateConnectionStatus(connected, message) {
+            isConnected = connected;
+            var statusEl = document.getElementById('connectionStatus');
+            var statusText = document.getElementById('statusText');
+            var dot = statusEl.querySelector('.status-dot');
+            var connectBtn = document.getElementById('connectBtn');
+            var disconnectBtn = document.getElementById('disconnectBtn');
+            var stopAlarmBtn = document.getElementById('stopAlarmBtn');
+
+            if (connected) {
+                statusEl.className = 'connection-status connected';
+                dot.className = 'status-dot online';
+                statusText.textContent = '已连接';
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+                stopAlarmBtn.disabled = false;
+                hideError();
+            } else {
+                statusEl.className = 'connection-status disconnected';
+                dot.className = 'status-dot offline';
+                statusText.textContent = '未连接';
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+                stopAlarmBtn.disabled = true;
+                if (message) {
+                    showError('连接失败', message);
+                }
+            }
+        }
+
+        function updateSpo2Value(spo2) {
+            var el = document.getElementById('spo2Value');
+            el.textContent = spo2 + '%';
+            
+            if (spo2 < 70 && spo2 > 0) {
+                el.className = 'value danger';
+            } else if (spo2 >= 70 && spo2 < 90) {
+                el.className = 'value warning';
+            } else {
+                el.className = 'value normal';
+            }
+        }
+
+        function updateHeartRateValue(heartRate) {
+            var el = document.getElementById('heartRateValue');
+            el.textContent = heartRate + ' bpm';
+            el.className = 'value info';
+        }
+
+        function updateAlarmStatus(isBlinking) {
+            var el = document.getElementById('alarmStatus');
+            var indicator = document.getElementById('alarmIndicator');
+            
+            if (isBlinking) {
+                el.textContent = '警报中';
+                el.className = 'value danger';
+                indicator.style.display = 'inline-flex';
+                indicator.className = 'alarm-indicator';
+            } else {
+                el.textContent = '正常';
+                el.className = 'value normal';
+                indicator.style.display = 'none';
+            }
+        }
+
+        function connect() {
+            hideError();
+            var hostname = document.getElementById('hostname').value.trim();
+            var port = parseInt(document.getElementById('port').value, 10) || 8084;
+            var clientId = document.getElementById('clientId').value.trim();
+            var username = document.getElementById('username').value;
+            var password = document.getElementById('password').value;
+
+            if (!hostname || !clientId) {
+                showError('配置错误', '请填写完整的连接信息');
+                return;
+            }
+
+            if (typeof mqtt === 'undefined') {
+                showError('加载失败', 'mqtt.js 未加载，请检查网络后刷新页面');
+                return;
+            }
+
+            if (client) {
+                intentionalDisconnect = true;
+                client.end(true);
+                client = null;
+            }
+            intentionalDisconnect = false;
+
+            var url = 'wss://' + hostname + ':' + port + '/mqtt';
+            log('正在连接到 EMQX Cloud: ' + url);
+
+            client = mqtt.connect(url, {
+                clientId: clientId,
+                username: username,
+                password: password,
+                clean: true,
+                reconnectPeriod: 0,
+                connectTimeout: 15000,
+                keepalive: 60
+            });
+
+            client.on('connect', function() {
+                log('连接成功！', 'success');
+                updateConnectionStatus(true);
+                client.subscribe('sensor/oxygen/status', { qos: 1 }, function(err) {
+                    if (err) {
+                        log('订阅失败: ' + err.message, 'error');
+                    } else {
+                        log('已订阅: sensor/oxygen/status', 'success');
+                    }
+                });
+            });
+
+            client.on('message', function(topic, message) {
+                var payload = message.toString();
+                log('收到消息 [' + topic + ']: ' + payload);
+
+                try {
+                    var data = JSON.parse(payload);
+                    if (topic.indexOf('sensor/oxygen/status') >= 0) {
+                        if (data.spo2 !== undefined) {
+                            updateSpo2Value(parseFloat(data.spo2));
+                        }
+                        if (data.heartRate !== undefined) {
+                            updateHeartRateValue(parseFloat(data.heartRate));
+                        }
+                        if (data.isBlinking !== undefined) {
+                            updateAlarmStatus(data.isBlinking === 1 || data.isBlinking === true);
+                        }
+                    }
+                } catch (e) {
+                    log('解析消息失败: ' + e.message, 'warning');
+                }
+            });
+
+            client.on('error', function(err) {
+                log('连接错误: ' + (err.message || err), 'error');
+                updateConnectionStatus(false, err.message || 'WebSocket error');
+            });
+
+            client.on('close', function() {
+                if (!intentionalDisconnect) {
+                    log('连接断开', 'error');
+                    updateConnectionStatus(false, 'Connection closed');
+                }
+            });
+        }
+
+        function disconnect() {
+            if (client) {
+                intentionalDisconnect = true;
+                client.end();
+                client = null;
+                log('已断开连接');
+                updateConnectionStatus(false);
+            }
+        }
+
+        function sendStopAlarm() {
+            if (!client || !isConnected) {
+                log('请先连接', 'warning');
+                return;
+            }
+
+            var topic = 'sensor/oxygen/control';
+            var payload = JSON.stringify({ stopAlarm: 1 });
+
+            client.publish(topic, payload, { qos: 1 }, function(err) {
+                if (err) {
+                    log('发送命令失败: ' + err.message, 'error');
+                } else {
+                    log('发送命令: 关闭警报', 'success');
+                    updateAlarmStatus(false);
+                }
+            });
+        }
+
+        log('页面加载完成，请点击「连接」按钮');
+    </script>
+</body>
+</html>
